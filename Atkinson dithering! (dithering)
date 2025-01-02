@@ -1,0 +1,102 @@
+@mrjloswald
+
+/*
+How to Use This Code
+
+1. Save the Code:
+a) Copy the entire code above and paste it into a text file.
+b) Save the file with a .swift extension (e.g., AtkinsonDither.swift).
+
+2. Set Input and Output Paths:
+a) Change the line let imagePath = "/path/to/your/image.jpg" to point to the actual path of your input image file.
+b) Change the line let outputPath = "/path/to/your/output_image.png" to specify where you want to save the processed image.
+
+3. Compile the Code:
+a) Open your terminal and navigate to the directory where you saved the AtkinsonDither.swift file.
+b) Compile the Swift file using the following command: swiftc AtkinsonDither.swift -o AtkinsonDither
+
+4. Run the Program:
+Run the compiled program with: ./AtkinsonDither
+
+5. Check Output:
+After running the program, check your specified output path for the dithered image.
+
+*/
+
+
+import Foundation
+import CoreGraphics
+import UIKit
+
+func atkinsonDither(image: UIImage) -> UIImage? {
+    guard let cgImage = image.cgImage else { return nil }
+    let width = cgImage.width
+    let height = cgImage.height
+    let colorSpace = CGColorSpaceCreateDeviceGray()
+    
+    guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace, bitmapInfo: 0) else { return nil }
+    
+    context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+    
+    guard let buffer = context.data else { return nil }
+    let pixelBuffer = buffer.bindMemory(to: UInt8.self, capacity: width * height)
+    
+    for y in 0..<height {
+        for x in 0..<width {
+            let index = y * width + x
+            var oldPixel = pixelBuffer[index]
+            let newPixel = oldPixel > 128 ? 255 : 0 // Thresholding
+            
+            pixelBuffer[index] = newPixel // Set new pixel value
+            
+            // Calculate error
+            let error = oldPixel - newPixel
+            
+            // Distribute error to neighboring pixels
+            if x + 1 < width {
+                pixelBuffer[index + 1] += (error * 7) / 16 // Right
+            }
+            if x - 1 >= 0 && y + 1 < height {
+                pixelBuffer[index + width - 1] += (error * 3) / 16 // Bottom left
+            }
+            if y + 1 < height {
+                pixelBuffer[index + width] += (error * 5) / 16 // Bottom
+            }
+            if x + 1 < width && y + 1 < height {
+                pixelBuffer[index + width + 1] += (error * 1) / 16 // Bottom right
+            }
+        }
+    }
+    
+    guard let outputCGImage = context.makeImage() else { return nil }
+    return UIImage(cgImage: outputCGImage)
+}
+
+// Main execution starts here
+
+let imagePath = "/path/to/your/image.jpg" // Change this line to your image path
+guard let inputImage = UIImage(contentsOfFile: imagePath) else {
+    print("Failed to load image")
+    exit(1)
+}
+
+if let outputImage = atkinsonDither(image: inputImage) {
+    print("Atkinson dithering applied successfully.")
+    
+    // Save the output image (you can specify the output path)
+    let outputPath = "/path/to/your/output_image.png" // Change this line to your desired output path
+    
+    guard let data = outputImage.pngData() else {
+        print("Failed to convert image to PNG data.")
+        exit(1)
+    }
+    
+    do {
+        try data.write(to: URL(fileURLWithPath: outputPath))
+        print("Output image saved to \(outputPath)")
+    } catch {
+        print("Failed to save image: \(error)")
+    }
+} else {
+    print("Failed to apply Atkinson dithering.")
+}
