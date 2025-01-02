@@ -1,0 +1,86 @@
+@mrjloswald
+
+/*
+How to Use This Code
+
+1. Save the Code :
+a) Copy the entire code above and paste it into a text file.
+b) Save the file with a .swift extension (e.g., ImageEditor.swift).
+
+2. Set Input and Output Paths:
+a) Change the line let imagePath = "/path/to/your/image.jpg" to point to the actual path of your input image file.
+b) Change the line let outputPath = "/path/to/your/output_image.png" to specify where you want to save the processed image.
+
+3. Compile the Code:
+a) Open your terminal and navigate to the directory where you saved the ImageEditor.swift file.
+b) Compile the Swift file using the following command: swiftc ImageEditor.swift -o ImageEditor
+
+4. Run the Program:
+Run the compiled program with: ./ImageEditor
+
+5. Follow Prompts:
+When prompted in the terminal, enter either maximum or minimum for the decomposition type.
+*/
+
+import Foundation
+import CoreGraphics
+import UIKit
+import ImageIO
+
+func convertToGrayscale(image: UIImage, shades: Int) -> UIImage? {
+    guard let cgImage = image.cgImage else { return nil }
+    let width = cgImage.width
+    let height = cgImage.height
+    let colorSpace = CGColorSpaceCreateDeviceGray()
+    
+    guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace, bitmapInfo: 0) else { return nil }
+    
+    context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+    
+    guard let buffer = context.data else { return nil }
+    let pixelBuffer = buffer.bindMemory(to: UInt8.self, capacity: width * height)
+    
+    let maxGrayValue = UInt8(shades - 1)
+    
+    for i in 0..<width * height {
+        pixelBuffer[i] = (pixelBuffer[i] * maxGrayValue) / 255
+    }
+    
+    guard let outputCGImage = context.makeImage() else { return nil }
+    return UIImage(cgImage: outputCGImage)
+}
+
+// Main execution starts here
+
+let imagePath = "/path/to/your/image.jpg" // Change this line to your image path
+guard let inputImage = UIImage(contentsOfFile: imagePath) else {
+    print("Failed to load image")
+    exit(1)
+}
+
+print("Enter the number of shades of gray (2-256): ", terminator: "")
+guard let input = readLine(), let shades = Int(input), shades >= 2 && shades <= 256 else {
+    print("Invalid input. Please enter a number between 2 and 256.")
+    exit(1)
+}
+
+if let outputImage = convertToGrayscale(image: inputImage, shades: shades) {
+    print("Grayscale conversion applied successfully.")
+    
+    // Save the output image (you can specify the output path)
+    let outputPath = "/path/to/your/output_image.png" // Change this line to your desired output path
+    
+    guard let data = outputImage.pngData() else {
+        print("Failed to convert image to PNG data.")
+        exit(1)
+    }
+    
+    do {
+        try data.write(to: URL(fileURLWithPath: outputPath))
+        print("Output image saved to \(outputPath)")
+    } catch {
+        print("Failed to save image: \(error)")
+    }
+} else {
+    print("Failed to apply grayscale conversion.")
+}
