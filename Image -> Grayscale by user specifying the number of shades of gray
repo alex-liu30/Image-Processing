@@ -6,7 +6,7 @@ How to Use This Code
 
 1. Save the Code:
 a) Copy the entire code above and paste it into a text file.
-b) Save the file with a .swift extension.
+b) Save the file by naming it "GrayscaleConverter.swift".
 
 2. Set Input and Output Paths:
 a) Change the line let imagePath = "/path/to/your/image.jpg" to point to the actual path of your input image file.
