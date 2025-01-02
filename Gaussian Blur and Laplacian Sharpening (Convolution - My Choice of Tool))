@@ -1,0 +1,102 @@
+@mrjloswald
+
+/*
+How to Use This Code
+
+1. Save the Code:
+a) Copy the entire code above and paste it into a text file.
+b) Save the file by naming it "ConvolutionTool.swift".
+
+2. Set Input and Output Paths:
+a) Change the line let imagePath = "/path/to/your/image.jpg" to point to the actual path of your input image file.
+b) Change the output paths inside the loop if desired.
+
+3. Compile the Code:
+a) Open your terminal and navigate to the directory where you saved the ConvolutionTool.swift file.
+b) Compile the Swift file using the following command: swiftc ConvolutionTool.swift -o ConvolutionTool
+
+4. Run the Program:
+a) Run the compiled program with: ./ConvolutionTool
+
+5. Check Output:
+a) After running the program, check your specified output paths for both the blurred and edge-detected images.
+
+*/
+
+import Foundation
+import CoreGraphics
+import UIKit
+
+func convolve(image: UIImage, kernel: [[Float]]) -> UIImage? {
+    guard let cgImage = image.cgImage else { return nil }
+    let width = cgImage.width, height = cgImage.height
+    let kernelSize = kernel.count, halfKernelSize = kernelSize / 2
+    
+    guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+    context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+    
+    guard let buffer = context.data else { return nil }
+    let pixelBuffer = buffer.bindMemory(to: UInt8.self, capacity: width * height * 4)
+    var outputBuffer = [UInt8](repeating: 0, count: width * height * 4)
+    
+    for y in 0..<height {
+        for x in 0..<width {
+            var rSum: Float = 0, gSum: Float = 0, bSum: Float = 0
+            
+            for ky in -halfKernelSize...halfKernelSize {
+                for kx in -halfKernelSize...halfKernelSize {
+                    let pixelX = min(max(x + kx, 0), width - 1)
+                    let pixelY = min(max(y + ky, 0), height - 1)
+                    let pixelIndex = (pixelY * width + pixelX) * 4
+                    
+                    rSum += Float(pixelBuffer[pixelIndex]) * kernel[ky + halfKernelSize][kx + halfKernelSize]
+                    gSum += Float(pixelBuffer[pixelIndex + 1]) * kernel[ky + halfKernelSize][kx + halfKernelSize]
+                    bSum += Float(pixelBuffer[pixelIndex + 2]) * kernel[ky + halfKernelSize][kx + halfKernelSize]
+                }
+            }
+            
+            let outputIndex = (y * width + x) * 4
+            outputBuffer[outputIndex] = min(max(Int(rSum), 0), 255)
+            outputBuffer[outputIndex + 1] = min(max(Int(gSum), 0), 255)
+            outputBuffer[outputIndex + 2] = min(max(Int(bSum), 0), 255)
+            outputBuffer[outputIndex + 3] = pixelBuffer[outputIndex + 3] // Preserve alpha
+        }
+    }
+    
+    return CGContext(data: &outputBuffer, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?.makeImage().flatMap { UIImage(cgImage: $0) }
+}
+
+// Main execution starts here
+let imagePath = "/path/to/your/image.jpg" // Change this line to your image path
+guard let inputImage = UIImage(contentsOfFile: imagePath) else { fatalError("Failed to load image") }
+
+// Define convolution kernels
+let kernels: [String: [[Float]]] = [
+    "Gaussian Blur": [
+        [1/16.0, 2/16.0, 1/16.0],
+        [2/16.0, 4/16.0, 2/16.0],
+        [1/16.0, 2/16.0, 1/16.0]
+    ],
+    "Laplacian": [
+        [0, -1, 0],
+        [-1, 4, -1],
+        [0, -1, 0]
+    ]
+]
+
+for (name, kernel) in kernels {
+    if let outputImage = convolve(image: inputImage, kernel: kernel) {
+        print("\(name) applied successfully.")
+        
+        let outputPath = "/path/to/your/\(name.lowercased().replacingOccurrences(of: " ", with: "_")).png" // Change this line to your desired output path
+        
+        do {
+            try outputImage.pngData()?.write(to: URL(fileURLWithPath: outputPath))
+            print("\(name) image saved to \(outputPath)")
+        } catch {
+            print("Failed to save \(name) image: \(error)")
+        }
+    } else {
+        print("Failed to apply \(name).")
+    }
+}
