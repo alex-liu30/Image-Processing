@@ -1,0 +1,120 @@
+/*
+
+Notes for Mr. Oswald  
+
+How to Use This Code
+
+1. Save Code:
+Save  provided code in a file named ImageEditor.swift.
+
+2. Compile Code:
+Open your terminal and navigate to the directory where you saved the file.
+
+Compile the Swift file using the command: swiftc ImageEditor.swift -o ImageEditor
+
+3. Run the Program:
+Run the compiled program with the path to your image file as an argument: ./ImageEditor /path/to/your/image.jpg
+
+4. Use any Commands:
+You can enter commands such as threshold, undo, redo, save, and quit as prompted by the program.
+
+*/
+
+import Foundation
+import CoreImage
+import CoreGraphics
+import ImageIO
+
+class ImageEditor {
+    private var image: CIImage
+    private var undoStack: [CIImage] = []
+    private var redoStack: [CIImage] = []
+    
+    init?(path: String) {
+        guard let image = CIImage(contentsOf: URL(fileURLWithPath: path)) else { return nil }
+        self.image = image
+    }
+    
+    func apply(_ effect: (CIImage) -> CIImage) {
+        undoStack.append(image)
+        redoStack.removeAll()
+        image = effect(image)
+    }
+    
+    func undo() { if let prev = undoStack.popLast() { redoStack.append(image); image = prev } }
+    func redo() { if let next = redoStack.popLast() { undoStack.append(image); image = next } }
+    
+    func applyAdaptiveThreshold() {
+        apply { img in
+            let filter = CIFilter(name: "CIColorControls")!
+            filter.setValue(img, forKey: kCIInputImageKey)
+            filter.setValue(1.0, forKey: kCIInputSaturationKey)
+            filter.setValue(0.0, forKey: kCIInputBrightnessKey)
+            filter.setValue(1.0, forKey: kCIInputContrastKey)
+            return filter.outputImage ?? img
+        }
+    }
+    
+    func save(to path: String) throws {
+        let context = CIContext()
+        guard let cgImage = context.createCGImage(image, from: image.extent) else {
+            throw NSError(domain: "ImageEditorError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to create CGImage"])
+        }
+        
+        guard let destination = CGImageDestinationCreateWithURL(URL(fileURLWithPath: path) as CFURL, kUTTypePNG, 1, nil) else {
+            throw NSError(domain: "ImageEditorError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to create image destination"])
+        }
+        
+        CGImageDestinationAddImage(destination, cgImage, nil)
+        
+        guard CGImageDestinationFinalize(destination) else {
+            throw NSError(domain: "ImageEditorError", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to save image"])
+        }
+    }
+}
+
+func main() {
+    guard CommandLine.arguments.count > 1 else {
+        print("Usage: <program_name> <path_to_image>")
+        return
+    }
+    
+    guard let editor = ImageEditor(path: CommandLine.arguments[1]) else {
+        print("Failed to load image")
+        return
+    }
+    
+    while true {
+        print("\nCommands: threshold, undo, redo, save, quit")
+        print("Enter command:", terminator: " ")
+        
+        guard let command = readLine()?.lowercased() else { continue }
+        
+        switch command {
+        case "threshold":
+            editor.applyAdaptiveThreshold()
+            print("Applied adaptive threshold")
+        case "undo":
+            editor.undo()
+            print("Undo performed")
+        case "redo":
+            editor.redo()
+            print("Redo performed")
+        case "save":
+            print("Enter output path:", terminator: " ")
+            guard let path = readLine() else { continue }
+            do {
+                try editor.save(to: path)
+                print("Image saved to \(path)")
+            } catch {
+                print("Failed to save: \(error)")
+            }
+        case "quit":
+            return
+        default:
+            print("Unknown command")
+        }
+    }
+}
+
+main()
