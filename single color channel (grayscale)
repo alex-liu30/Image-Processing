@@ -1,0 +1,103 @@
+@mrjoswald
+
+/*
+How to Use Code
+
+1. Save the Code:
+a)Copy the entire code above and paste it into a text file.
+b) Save the file by naming it "ChannelGrayscaleConverter.swift".
+
+2. Set Input and Output Paths:
+a) Change the line let imagePath = "/path/to/your/image.jpg" to point to the actual path of your input image file.
+b) Change the line let outputPath = "/path/to/your/output_image.png" to specify where you want to save the processed image.
+
+3. Compile the Code:
+a) Open your terminal and navigate to the directory where you saved the ChannelGrayscaleConverter.swift file.
+
+4. Compile the Swift file using the following command: swiftc ChannelGrayscaleConverter.swift -o ChannelGrayscaleConverter
+
+5. Run the Program:
+a) Run the compiled program with: ./ChannelGrayscaleConverter
+
+6. Follow Prompts:
+When prompted in the terminal, enter 0 for red, 1 for green, or 2 for blue as the color channel you want to use for grayscale conversion.
+
+*/
+
+
+import Foundation
+import CoreGraphics
+import UIKit
+import ImageIO
+
+func convertToGrayscaleUsingChannel(image: UIImage, channel: Int) -> UIImage? {
+    guard let cgImage = image.cgImage else { return nil }
+    let width = cgImage.width
+    let height = cgImage.height
+    let colorSpace = CGColorSpaceCreateDeviceRGB()
+    
+    guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace, bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return nil }
+    
+    context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+    
+    guard let buffer = context.data else { return nil }
+    let pixelBuffer = buffer.bindMemory(to: UInt8.self, capacity: width * height * 4)
+    
+    for i in 0..<width * height {
+        let index = i * 4
+        let grayValue: UInt8
+        
+        switch channel {
+        case 0: // Red channel
+            grayValue = pixelBuffer[index]
+        case 1: // Green channel
+            grayValue = pixelBuffer[index + 1]
+        case 2: // Blue channel
+            grayValue = pixelBuffer[index + 2]
+        default:
+            return nil // Invalid channel
+        }
+        
+        pixelBuffer[index] = grayValue
+        pixelBuffer[index + 1] = grayValue
+        pixelBuffer[index + 2] = grayValue
+    }
+    
+    guard let outputCGImage = context.makeImage() else { return nil }
+    return UIImage(cgImage: outputCGImage)
+}
+
+// Main execution starts here!!!!!
+
+let imagePath = "/path/to/your/image.jpg" // Change this line to your image path
+guard let inputImage = UIImage(contentsOfFile: imagePath) else {
+    print("Failed to load image")
+    exit(1)
+}
+
+print("Choose a channel for grayscale conversion (0 for Red, 1 for Green, 2 for Blue): ", terminator: "")
+guard let input = readLine(), let channel = Int(input), channel >= 0 && channel <= 2 else {
+    print("Invalid input. Please enter 0, 1, or 2.")
+    exit(1)
+}
+
+if let outputImage = convertToGrayscaleUsingChannel(image: inputImage, channel: channel) {
+    print("Grayscale conversion applied successfully.")
+    
+    // Save the output image (you can specify the output path)
+    let outputPath = "/path/to/your/output_image.png" // Change this line to your desired output path
+    
+    guard let data = outputImage.pngData() else {
+        print("Failed to convert image to PNG data.")
+        exit(1)
+    }
+    
+    do {
+        try data.write(to: URL(fileURLWithPath: outputPath))
+        print("Output image saved to \(outputPath)")
+    } catch {
+        print("Failed to save image: \(error)")
+    }
+} else {
+    print("Failed to apply grayscale conversion.")
+}
