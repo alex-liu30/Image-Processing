@@ -10,9 +10,8 @@ How to Use This Code
 Save  provided code in a file named ImageEditor.swift.
 
 2. Compile Code:
-Open your terminal and navigate to the directory where you saved the file.
-
-Compile the Swift file using the command: swiftc ImageEditor.swift -o ImageEditor
+a) Open your terminal and navigate to the directory where you saved the file.
+b) Compile the Swift file using the command: swiftc ImageEditor.swift -o ImageEditor
 
 3. Run the Program:
 Run the compiled program with the path to your image file as an argument: ./ImageEditor /path/to/your/image.jpg
