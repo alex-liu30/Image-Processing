@@ -10,7 +10,14 @@ a) Open your terminal and navigate to the directory containing the .swift file.
 
 b) Compile using the command: swiftc ImageEditor.swift -o ImageEditor
 
-3. Run the Program: grayscale <shades> [x y width height]
+3. Run the Program:
+Execute the compiled program: ./ImageEditor
+
+4. Follow Prompt: grayscale <shades> [x y width height]
+
+5. Optional Region Processing:
+For each effect, you can specify a region to apply it to by adding x, y, width, and height values after the command.
+
 
 Note: General commands for all tools:
 undo: Undo the last operation
@@ -18,9 +25,6 @@ redo: Redo the last undone operation
 save <path>: Save the current image
 revert: Return to the original image
 quit: Exit the program
-
-4. Optional Region Processing:
-For each effect, you can specify a region to apply it to by adding x, y, width, and height values after the command.
 
 */
 
