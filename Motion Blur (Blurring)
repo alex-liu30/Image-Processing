@@ -3,15 +3,17 @@
 /*
 
 1. Save the Code:
-Copy the entire code for each tool and save it as a separate .swift file (e.g. "ImageEditor.swift").
+Copy the entire code and save it as a separate .swift file with a name of: MotionBlur.swift
 
 2. Compile the Code:
 a) Open your terminal and navigate to the directory containing the .swift file.
-
-b) Compile using the command: swiftc ImageEditor.swift -o ImageEditor
+b) Compile using the command: swiftc <filename>.swift -o <outputname>
+For example: swiftc AdaptiveThresholding.swift -o AdaptiveThresholding
 
 3. Run the Program:
-Execute the compiled program: ./ImageEditor
+Execute the compiled program using: ./<outputname>
+For example: ./AdaptiveThresholding
+
 
 4. Use Command: blur <radius> <angle> [x y width height]
 
