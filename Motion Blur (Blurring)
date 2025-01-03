@@ -3,22 +3,28 @@
 /*
 
 1. Save the Code:
-a) Copy the entire code above and paste it into a text file.
-b) Save the file by naming it "MotionBlurConverter.swift".
+Copy the entire code for each tool and save it as a separate .swift file (e.g. "ImageEditor.swift").
 
-2. Set Input and Output Paths:
-a) Change the line let imagePath = "/path/to/your/image.jpg" to point to the actual path of your input image file.
-b) Change the line let outputPath = "/path/to/your/output_image.png" to specify where you want to save the processed image.
+2. Compile the Code:
+a) Open your terminal and navigate to the directory containing the .swift file.
 
-3. Compile the Code:
-a) Open your terminal and navigate to the directory where you saved the MotionBlurConverter.swift file.
-b Compile the Swift file using the following command: swiftc MotionBlurConverter.swift -o MotionBlurConverter
+b) Compile using the command: swiftc ImageEditor.swift -o ImageEditor
 
-4. Run the Program:
-Run the compiled program with: ./MotionBlurConverter
+3. Run the Program:
+Execute the compiled program: ./ImageEditor
 
-5. Follow Prompts:
-When prompted in the terminal, enter the blur radius (between 0 and 100) and the angle of motion blur in degrees.
+4. Follow Prompt: blur <radius> <angle> [x y width height]
+
+
+Note: General commands for all tools:
+undo: Undo the last operation
+redo: Redo the last undone operation
+save <path>: Save the current image
+revert: Return to the original image
+quit: Exit the program
+
+5. Optional Region Processing:
+For each effect, you can specify a region to apply it to by adding x, y, width, and height values after the command.
 
 */
 
