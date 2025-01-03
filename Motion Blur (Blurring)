@@ -26,55 +26,61 @@ import Foundation
 import CoreImage
 import UIKit
 
-func applyMotionBlur(to image: UIImage, radius: CGFloat, angle: CGFloat) -> UIImage? {
-    guard let ciImage = CIImage(image: image) else { return nil }
-    
-    let motionBlurFilter = CIFilter(name: "CIMotionBlur")!
-    motionBlurFilter.setValue(ciImage, forKey: kCIInputImageKey)
-    motionBlurFilter.setValue(radius, forKey: kCIInputRadiusKey)
-    motionBlurFilter.setValue(angle * .pi / 180, forKey: kCIInputAngleKey) // Convert degrees to radians
-    
-    guard let outputImage = motionBlurFilter.outputImage else { return nil }
-    return UIImage(ciImage: outputImage)
-}
+class ImageEditor {
+    private var imageStack: [UIImage] = []
+    private var currentIndex = 0
 
-// Main execution starts here
-
-let imagePath = "/path/to/your/image.jpg" // Change this line to your image path
-guard let inputImage = UIImage(contentsOfFile: imagePath) else {
-    print("Failed to load image")
-    exit(1)
-}
-
-print("Enter blur radius (0-100): ", terminator: "")
-guard let radiusInput = readLine(), let radius = CGFloat(Double(radiusInput) ?? 0), radius >= 0 && radius <= 100 else {
-    print("Invalid input. Please enter a number between 0 and 100.")
-    exit(1)
-}
-
-print("Enter blur angle (in degrees): ", terminator: "")
-guard let angleInput = readLine(), let angle = CGFloat(Double(angleInput) ?? 0) else {
-    print("Invalid input. Please enter a valid angle.")
-    exit(1)
-}
-
-if let outputImage = applyMotionBlur(to: inputImage, radius: radius, angle: angle) {
-    print("Motion blur applied successfully.")
-    
-    // Save the output image (you can specify the output path)
-    let outputPath = "/path/to/your/output_image.png" // Change this line to your desired output path
-    
-    guard let data = outputImage.pngData() else {
-        print("Failed to convert image to PNG data.")
-        exit(1)
+    init?(path: String) {
+        guard let inputImage = UIImage(contentsOfFile: path) else { return nil }
+        imageStack.append(inputImage)
     }
-    
-    do {
-        try data.write(to: URL(fileURLWithPath: outputPath))
-        print("Output image saved to \(outputPath)")
-    } catch {
-        print("Failed to save image: \(error)")
+
+    func applyMotionBlur(radius: CGFloat, angle: CGFloat, region: CGRect? = nil) {
+        guard let ciImage = CIImage(image: imageStack[currentIndex]) else { return }
+        let filter = CIFilter(name: "CIMotionBlur")!
+        filter.setValue(ciImage, forKey: kCIInputImageKey)
+        filter.setValue(radius, forKey: kCIInputRadiusKey)
+        filter.setValue(angle * .pi / 180, forKey: kCIInputAngleKey)
+        guard let outputImage = filter.outputImage else { return }
+
+        if let region = region {
+            UIGraphicsBeginImageContext(imageStack[currentIndex].size)
+            imageStack[currentIndex].draw(in: CGRect(origin: .zero, size: imageStack[currentIndex].size))
+            UIImage(ciImage: outputImage).draw(in: region)
+            imageStack.append(UIGraphicsGetImageFromCurrentImageContext()!)
+            UIGraphicsEndImageContext()
+        } else {
+            imageStack.append(UIImage(ciImage: outputImage))
+        }
+        currentIndex += 1
     }
-} else {
-    print("Failed to apply motion blur.")
+
+    func undo() { if currentIndex > 0 { currentIndex -= 1 } }
+    func redo() { if currentIndex < imageStack.count - 1 { currentIndex += 1 } }
+    func revertToOriginal() { currentIndex = 0 }
+    func save(to path: String) { try? imageStack[currentIndex].pngData()?.write(to: URL(fileURLWithPath: path)) }
 }
+
+func main() {
+    print("Enter image path:")
+    guard let path = readLine(), let editor = ImageEditor(path: path) else { fatalError("Failed to load image") }
+
+    while true {
+        print("\nCommands: blur <radius> <angle> [x y width height], undo, redo, save <path>, revert, quit")
+        guard let input = readLine()?.lowercased().split(separator: " ") else { continue }
+        switch input[0] {
+        case "blur":
+            guard input.count >= 3, let radius = CGFloat(input[1]), let angle = CGFloat(input[2]) else { print("Invalid input"); continue }
+            let region = input.count == 7 ? CGRect(x: Double(input[3])!, y: Double(input[4])!, width: Double(input[5])!, height: Double(input[6])!) : nil
+            editor.applyMotionBlur(radius: radius, angle: angle, region: region)
+        case "undo": editor.undo()
+        case "redo": editor.redo()
+        case "save": if input.count == 2 { editor.save(to: String(input[1])) }
+        case "revert": editor.revertToOriginal()
+        case "quit": return
+        default: print("Unknown command")
+        }
+    }
+}
+
+main()
