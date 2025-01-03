@@ -13,7 +13,7 @@ b) Compile using the command: swiftc ImageEditor.swift -o ImageEditor
 3. Run the Program:
 Execute the compiled program: ./ImageEditor
 
-4. Follow Prompt: grayscale <channel> [x y width height]
+4. Use Command: grayscale <channel> [x y width height]
 
 Note: General commands for all tools:
 undo: Undo the last operation
