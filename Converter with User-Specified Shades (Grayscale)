@@ -23,66 +23,102 @@ Run the compiled program with: ./GrayscaleConverter
 When prompted in the terminal, enter the number of shades of gray you want (between 2 and 256).
 */
 
-
 import Foundation
 import CoreGraphics
 import UIKit
-import ImageIO
 
-func convertToGrayscale(image: UIImage, shades: Int) -> UIImage? {
-    guard let cgImage = image.cgImage else { return nil }
-    let width = cgImage.width
-    let height = cgImage.height
-    let colorSpace = CGColorSpaceCreateDeviceGray()
-    
-    guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace, bitmapInfo: 0) else { return nil }
-    
-    context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-    
-    guard let buffer = context.data else { return nil }
-    let pixelBuffer = buffer.bindMemory(to: UInt8.self, capacity: width * height)
-    
-    let maxGrayValue = UInt8(shades - 1)
-    
-    for i in 0..<width * height {
-        pixelBuffer[i] = (pixelBuffer[i] * maxGrayValue) / 255
+class ImageEditor {
+    private var imageStack: [UIImage] = []
+    private var currentIndex = 0
+    private let originalImage: UIImage
+
+    init?(path: String) {
+        guard let inputImage = UIImage(contentsOfFile: path) else { return nil }
+        self.originalImage = inputImage
+        self.imageStack.append(inputImage)
     }
-    
-    guard let outputCGImage = context.makeImage() else { return nil }
-    return UIImage(cgImage: outputCGImage)
-}
 
-// Main execution starts here
+    func applyGrayscale(shades: Int, region: CGRect? = nil) {
+        guard let currentImage = imageStack[currentIndex], let cgImage = currentImage.cgImage else { return }
+        let width = region?.width ?? CGFloat(cgImage.width)
+        let height = region?.height ?? CGFloat(cgImage.height)
 
-let imagePath = "/path/to/your/image.jpg" // Change this line to your image path
-guard let inputImage = UIImage(contentsOfFile: imagePath) else {
-    print("Failed to load image")
-    exit(1)
-}
+        guard let context = CGContext(data: nil, width: Int(width), height: Int(height), bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceGray(), bitmapInfo: 0) else { return }
+        
+        context.draw(cgImage, in: region ?? CGRect(x: 0, y: 0, width: width, height: height))
+        guard let buffer = context.data?.bindMemory(to: UInt8.self, capacity: Int(width * height)) else { return }
 
-print("Enter the number of shades of gray (2-256): ", terminator: "")
-guard let input = readLine(), let shades = Int(input), shades >= 2 && shades <= 256 else {
-    print("Invalid input. Please enter a number between 2 and 256.")
-    exit(1)
-}
+        for i in 0..<Int(width * height) {
+            buffer[i] = (buffer[i] * UInt8(shades - 1)) / 255
+        }
 
-if let outputImage = convertToGrayscale(image: inputImage, shades: shades) {
-    print("Grayscale conversion applied successfully.")
-    
-    // Save the output image (you can specify the output path)
-    let outputPath = "/path/to/your/output_image.png" // Change this line to your desired output path
-    
-    guard let data = outputImage.pngData() else {
-        print("Failed to convert image to PNG data.")
-        exit(1)
+        guard let outputCGImage = context.makeImage() else { return }
+        let outputImage = UIImage(cgImage: outputCGImage)
+
+        if let region = region {
+            UIGraphicsBeginImageContext(currentImage.size)
+            currentImage.draw(in: CGRect(origin: .zero, size: currentImage.size))
+            outputImage.draw(in: region)
+            imageStack.append(UIGraphicsGetImageFromCurrentImageContext()!)
+            UIGraphicsEndImageContext()
+        } else {
+            imageStack.append(outputImage)
+        }
+        
+        currentIndex += 1
     }
+
+    func undo() { if currentIndex > 0 { currentIndex -= 1 } }
+    func redo() { if currentIndex < imageStack.count - 1 { currentIndex += 1 } }
+    func revertToOriginal() { imageStack = [originalImage]; currentIndex = 0 }
     
-    do {
-        try data.write(to: URL(fileURLWithPath: outputPath))
-        print("Output image saved to \(outputPath)")
-    } catch {
-        print("Failed to save image: \(error)")
+    func save(to path: String) {
+        guard let data = imageStack[currentIndex].pngData() else { return }
+        try? data.write(to: URL(fileURLWithPath: path))
     }
-} else {
-    print("Failed to apply grayscale conversion.")
 }
+
+func main() {
+    print("Enter the path to your image:", terminator: " ")
+    guard let imagePath = readLine(), let editor = ImageEditor(path: imagePath) else {
+        print("Failed to load image")
+        return
+    }
+
+    while true {
+        print("\nCommands: grayscale, undo, redo, save, revert, region, quit")
+        print("Enter command:", terminator: " ")
+        
+        guard let command = readLine()?.lowercased() else { continue }
+        
+        switch command {
+        case "grayscale":
+            print("Enter shades (2-256): ", terminator: "")
+            if let input = readLine(), let shades = Int(input), shades >= 2 && shades <= 256 {
+                editor.applyGrayscale(shades: shades)
+                print("Grayscale applied.")
+            } else {
+                print("Invalid input.")
+            }
+        case "undo": editor.undo(); print("Undo performed.")
+        case "redo": editor.redo(); print("Redo performed.")
+        case "save":
+            print("Enter output path:", terminator: " ")
+            if let path = readLine() { editor.save(to: path); print("Saved to \(path).") }
+        case "revert": editor.revertToOriginal(); print("Reverted to original.")
+        case "region":
+            print("Enter region (x y width height):", terminator: " ")
+            if let regionInput = readLine(),
+               let values = regionInput.split(separator: " ").compactMap({ CGFloat(String($0)) }), values.count == 4 {
+                editor.applyGrayscale(shades: 256, region: CGRect(x: values[0], y: values[1], width: values[2], height: values[3]))
+                print("Applied grayscale to region.")
+            } else {
+                print("Invalid region input.")
+            }
+        case "quit": return
+        default: print("Unknown command.")
+        }
+    }
+}
+
+main()
