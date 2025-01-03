@@ -27,76 +27,90 @@ import Foundation
 import CoreGraphics
 import UIKit
 
-func convolve(image: UIImage, kernel: [[Float]]) -> UIImage? {
-    guard let cgImage = image.cgImage else { return nil }
-    let width = cgImage.width, height = cgImage.height
-    let kernelSize = kernel.count, halfKernelSize = kernelSize / 2
-    
-    guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-    context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-    
-    guard let buffer = context.data else { return nil }
-    let pixelBuffer = buffer.bindMemory(to: UInt8.self, capacity: width * height * 4)
-    var outputBuffer = [UInt8](repeating: 0, count: width * height * 4)
-    
-    for y in 0..<height {
-        for x in 0..<width {
-            var rSum: Float = 0, gSum: Float = 0, bSum: Float = 0
-            
-            for ky in -halfKernelSize...halfKernelSize {
-                for kx in -halfKernelSize...halfKernelSize {
-                    let pixelX = min(max(x + kx, 0), width - 1)
-                    let pixelY = min(max(y + ky, 0), height - 1)
-                    let pixelIndex = (pixelY * width + pixelX) * 4
-                    
-                    rSum += Float(pixelBuffer[pixelIndex]) * kernel[ky + halfKernelSize][kx + halfKernelSize]
-                    gSum += Float(pixelBuffer[pixelIndex + 1]) * kernel[ky + halfKernelSize][kx + halfKernelSize]
-                    bSum += Float(pixelBuffer[pixelIndex + 2]) * kernel[ky + halfKernelSize][kx + halfKernelSize]
+class ImageEditor {
+    private var imageStack: [UIImage] = []
+    private var currentIndex = 0
+
+    init?(path: String) {
+        guard let inputImage = UIImage(contentsOfFile: path) else { return nil }
+        imageStack.append(inputImage)
+    }
+
+    func convolve(kernel: [[Float]], region: CGRect? = nil) {
+        guard let image = imageStack[currentIndex].cgImage else { return }
+        let width = region?.width ?? CGFloat(image.width)
+        let height = region?.height ?? CGFloat(image.height)
+        let kernelSize = kernel.count, halfKernelSize = kernelSize / 2
+        
+        guard let context = CGContext(data: nil, width: Int(width), height: Int(height), bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+        context.draw(image, in: region ?? CGRect(x: 0, y: 0, width: width, height: height))
+        
+        guard let buffer = context.data?.bindMemory(to: UInt8.self, capacity: Int(width * height * 4)) else { return }
+        var outputBuffer = [UInt8](repeating: 0, count: Int(width * height * 4))
+        
+        for y in 0..<Int(height) {
+            for x in 0..<Int(width) {
+                var sum = [Float](repeating: 0, count: 3)
+                for ky in -halfKernelSize...halfKernelSize {
+                    for kx in -halfKernelSize...halfKernelSize {
+                        let px = min(max(x + kx, 0), Int(width) - 1)
+                        let py = min(max(y + ky, 0), Int(height) - 1)
+                        let i = (py * Int(width) + px) * 4
+                        let k = kernel[ky + halfKernelSize][kx + halfKernelSize]
+                        for c in 0..<3 { sum[c] += Float(buffer[i + c]) * k }
+                    }
                 }
+                let o = (y * Int(width) + x) * 4
+                for c in 0..<3 { outputBuffer[o + c] = UInt8(min(max(Int(sum[c]), 0), 255)) }
+                outputBuffer[o + 3] = buffer[o + 3]
             }
-            
-            let outputIndex = (y * width + x) * 4
-            outputBuffer[outputIndex] = min(max(Int(rSum), 0), 255)
-            outputBuffer[outputIndex + 1] = min(max(Int(gSum), 0), 255)
-            outputBuffer[outputIndex + 2] = min(max(Int(bSum), 0), 255)
-            outputBuffer[outputIndex + 3] = pixelBuffer[outputIndex + 3] // Preserve alpha
+        }
+        
+        if let outputImage = CGContext(data: &outputBuffer, width: Int(width), height: Int(height), bitsPerComponent: 8, bytesPerRow: Int(width) * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?.makeImage().flatMap({ UIImage(cgImage: $0) }) {
+            if region != nil {
+                UIGraphicsBeginImageContext(imageStack[currentIndex].size)
+                imageStack[currentIndex].draw(in: CGRect(origin: .zero, size: imageStack[currentIndex].size))
+                outputImage.draw(in: region!)
+                imageStack.append(UIGraphicsGetImageFromCurrentImageContext()!)
+                UIGraphicsEndImageContext()
+            } else {
+                imageStack.append(outputImage)
+            }
+            currentIndex += 1
         }
     }
-    
-    return CGContext(data: &outputBuffer, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?.makeImage().flatMap { UIImage(cgImage: $0) }
+
+    func undo() { if currentIndex > 0 { currentIndex -= 1 } }
+    func redo() { if currentIndex < imageStack.count - 1 { currentIndex += 1 } }
+    func revertToOriginal() { currentIndex = 0 }
+    func save(to path: String) { try? imageStack[currentIndex].pngData()?.write(to: URL(fileURLWithPath: path)) }
 }
 
-// Main execution starts here
-let imagePath = "/path/to/your/image.jpg" // Change this line to your image path
-guard let inputImage = UIImage(contentsOfFile: imagePath) else { fatalError("Failed to load image") }
+func main() {
+    print("Enter image path:")
+    guard let path = readLine(), let editor = ImageEditor(path: path) else { fatalError("Failed to load image") }
 
-// Define convolution kernels
-let kernels: [String: [[Float]]] = [
-    "Gaussian Blur": [
-        [1/16.0, 2/16.0, 1/16.0],
-        [2/16.0, 4/16.0, 2/16.0],
-        [1/16.0, 2/16.0, 1/16.0]
-    ],
-    "Laplacian": [
-        [0, -1, 0],
-        [-1, 4, -1],
-        [0, -1, 0]
+    let kernels: [String: [[Float]]] = [
+        "Gaussian Blur": [[1/16, 2/16, 1/16], [2/16, 4/16, 2/16], [1/16, 2/16, 1/16]],
+        "Laplacian": [[0, -1, 0], [-1, 4, -1], [0, -1, 0]]
     ]
-]
 
-for (name, kernel) in kernels {
-    if let outputImage = convolve(image: inputImage, kernel: kernel) {
-        print("\(name) applied successfully.")
-        
-        let outputPath = "/path/to/your/\(name.lowercased().replacingOccurrences(of: " ", with: "_")).png" // Change this line to your desired output path
-        
-        do {
-            try outputImage.pngData()?.write(to: URL(fileURLWithPath: outputPath))
-            print("\(name) image saved to \(outputPath)")
-        } catch {
-            print("Failed to save \(name) image: \(error)")
+    while true {
+        print("\nCommands: apply <filter> [x y width height], undo, redo, save <path>, revert, quit")
+        guard let input = readLine()?.lowercased().split(separator: " ") else { continue }
+        switch input[0] {
+        case "apply":
+            guard input.count >= 2, let kernel = kernels[String(input[1])] else { print("Invalid filter"); continue }
+            let region = input.count == 6 ? CGRect(x: Double(input[2])!, y: Double(input[3])!, width: Double(input[4])!, height: Double(input[5])!) : nil
+            editor.convolve(kernel: kernel, region: region)
+        case "undo": editor.undo()
+        case "redo": editor.redo()
+        case "save": if input.count == 2 { editor.save(to: String(input[1])) }
+        case "revert": editor.revertToOriginal()
+        case "quit": return
+        default: print("Unknown command")
         }
-    } else {
-        print("Failed to apply \(name).")
     }
 }
+
+main()
