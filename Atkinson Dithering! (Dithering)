@@ -27,120 +27,169 @@ import Foundation
 import CoreGraphics
 import UIKit
 
-var imageStack: [UIImage] = []
-var currentIndex = -1
+class ImageEditor {
+    private var imageStack: [UIImage] = []
+    private var currentIndex = -1
+    private var originalImage: UIImage
 
-func atkinsonDither(image: UIImage) -> UIImage? {
-    guard let cgImage = image.cgImage else { return nil }
-    let width = cgImage.width
-    let height = cgImage.height
-    let colorSpace = CGColorSpaceCreateDeviceGray()
-    
-    guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace, bitmapInfo: 0) else { return nil }
-    
-    context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-    
-    guard let buffer = context.data else { return nil }
-    let pixelBuffer = buffer.bindMemory(to: UInt8.self, capacity: width * height)
-    
-    for y in 0..<height {
-        for x in 0..<width {
-            let index = y * width + x
-            var oldPixel = pixelBuffer[index]
-            let newPixel = oldPixel > 128 ? 255 : 0 // Thresholding
-            
-            pixelBuffer[index] = newPixel // Set new pixel value
-            
-            // Calculate error
-            let error = oldPixel - newPixel
-            
-            // Distribute error to neighboring pixels
-            if x + 1 < width {
-                pixelBuffer[index + 1] += (error * 7) / 16 // Right
-            }
-            if x - 1 >= 0 && y + 1 < height {
-                pixelBuffer[index + width - 1] += (error * 3) / 16 // Bottom left
-            }
-            if y + 1 < height {
-                pixelBuffer[index + width] += (error * 5) / 16 // Bottom
-            }
-            if x + 1 < width && y + 1 < height {
-                pixelBuffer[index + width + 1] += (error * 1) / 16 // Bottom right
+    init?(path: String) {
+        guard let inputImage = UIImage(contentsOfFile: path) else { return nil }
+        self.originalImage = inputImage
+        self.imageStack.append(inputImage)
+        self.currentIndex = 0
+    }
+
+    func atkinsonDither(image: UIImage, region: CGRect? = nil) -> UIImage? {
+        guard let cgImage = image.cgImage else { return nil }
+        let width = region?.width ?? CGFloat(cgImage.width)
+        let height = region?.height ?? CGFloat(cgImage.height)
+        let colorSpace = CGColorSpaceCreateDeviceGray()
+        
+        guard let context = CGContext(data: nil, width: Int(width), height: Int(height), bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace, bitmapInfo: 0) else { return nil }
+        
+        let drawRect = region ?? CGRect(x: 0, y: 0, width: width, height: height)
+        context.draw(cgImage, in: drawRect)
+        
+        guard let buffer = context.data else { return nil }
+        let pixelBuffer = buffer.bindMemory(to: UInt8.self, capacity: Int(width * height))
+        
+        for y in 0..<Int(height) {
+            for x in 0..<Int(width) {
+                let index = y * Int(width) + x
+                var oldPixel = pixelBuffer[index]
+                let newPixel = oldPixel > 128 ? 255 : 0 // Thresholding
+                
+                pixelBuffer[index] = newPixel // Set new pixel value
+                
+                // Calculate error
+                let error = oldPixel - newPixel
+                
+                // Distribute error to neighboring pixels
+                if x + 1 < Int(width) {
+                    pixelBuffer[index + 1] += (error * 7) / 16 // Right
+                }
+                if x - 1 >= 0 && y + 1 < Int(height) {
+                    pixelBuffer[index + Int(width) - 1] += (error * 3) / 16 // Bottom left
+                }
+                if y + 1 < Int(height) {
+                    pixelBuffer[index + Int(width)] += (error * 5) / 16 // Bottom
+                }
+                if x + 1 < Int(width) && y + 1 < Int(height) {
+                    pixelBuffer[index + Int(width) + 1] += (error * 1) / 16 // Bottom right
+                }
             }
         }
+        
+        guard let outputCGImage = context.makeImage() else { return nil }
+        let outputImage = UIImage(cgImage: outputCGImage)
+        
+        if let region = region {
+            UIGraphicsBeginImageContextWithOptions(image.size, false, image.scale)
+            image.draw(in: CGRect(origin: .zero, size: image.size))
+            outputImage.draw(in: region)
+            let finalImage = UIGraphicsGetImageFromCurrentImageContext()
+            UIGraphicsEndImageContext()
+            return finalImage
+        } else {
+            return outputImage
+        }
     }
-    
-    guard let outputCGImage = context.makeImage() else { return nil }
-    return UIImage(cgImage: outputCGImage)
-}
 
-func undo() {
-    if currentIndex > 0 {
-        currentIndex -= 1
-        print("Undo performed")
-    } else {
-        print("Nothing to undo")
-    }
-}
-
-func redo() {
-    if currentIndex < imageStack.count - 1 {
+    func applyDither(to region: CGRect? = nil) {
+        guard let currentImage = imageStack[currentIndex],
+              let ditheredImage = atkinsonDither(image: currentImage, region: region) else {
+            print("Failed to apply Atkinson dithering.")
+            return
+        }
+        
         currentIndex += 1
-        print("Redo performed")
-    } else {
-        print("Nothing to redo")
+        imageStack.removeSubrange(currentIndex..<imageStack.count)
+        imageStack.append(ditheredImage)
+        print("Atkinson dithering applied successfully.")
+    }
+
+    func undo() {
+        if currentIndex > 0 {
+            currentIndex -= 1
+            print("Undo performed")
+        } else {
+            print("Nothing to undo")
+        }
+    }
+
+    func redo() {
+        if currentIndex < imageStack.count - 1 {
+            currentIndex += 1
+            print("Redo performed")
+        } else {
+            print("Nothing to redo")
+        }
+    }
+
+    func revertToOriginal() {
+        currentIndex += 1
+        imageStack.removeSubrange(currentIndex..<imageStack.count)
+        imageStack.append(originalImage)
+        print("Reverted to original image")
+    }
+
+    func save(to path: String) {
+        guard currentIndex >= 0, let data = imageStack[currentIndex].pngData() else {
+            print("No image to save")
+            return
+        }
+        do {
+            try data.write(to: URL(fileURLWithPath: path))
+            print("Image saved to \(path)")
+        } catch {
+            print("Failed to save image: \(error)")
+        }
     }
 }
 
-func save(to path: String) {
-    guard currentIndex >= 0, let data = imageStack[currentIndex].pngData() else {
-        print("No image to save")
+func main() {
+    print("Enter the path to your image:", terminator: " ")
+    guard let imagePath = readLine(), let editor = ImageEditor(path: imagePath) else {
+        print("Failed to load image")
         return
     }
-    do {
-        try data.write(to: URL(fileURLWithPath: path))
-        print("Image saved to \(path)")
-    } catch {
-        print("Failed to save image: \(error)")
-    }
-}
 
-// Main execution starts here
-
-let imagePath = "/path/to/your/image.jpg" // Change this line to your image path
-guard let inputImage = UIImage(contentsOfFile: imagePath) else {
-    print("Failed to load image")
-    exit(1)
-}
-
-imageStack.append(inputImage)
-currentIndex = 0
-
-while true {
-    print("Enter command (dither/undo/redo/save/quit):", terminator: " ")
-    guard let command = readLine()?.lowercased() else { continue }
-    
-    switch command {
-    case "dither":
-        if let ditheredImage = atkinsonDither(image: imageStack[currentIndex]) {
-            currentIndex += 1
-            imageStack.removeSubrange(currentIndex..<imageStack.count)
-            imageStack.append(ditheredImage)
-            print("Atkinson dithering applied successfully.")
-        } else {
-            print("Failed to apply Atkinson dithering.")
+    while true {
+        print("\nCommands: dither, undo, redo, save, revert, region, quit")
+        print("Enter command:", terminator: " ")
+        
+        guard let command = readLine()?.lowercased() else { continue }
+        
+        switch command {
+        case "dither":
+            editor.applyDither()
+        case "undo":
+            editor.undo()
+        case "redo":
+            editor.redo()
+        case "save":
+            print("Enter output path:", terminator: " ")
+            guard let path = readLine() else { continue }
+            editor.save(to: path)
+        case "revert":
+            editor.revertToOriginal()
+        case "region":
+            print("Enter region (x y width height):", terminator: " ")
+            guard let regionInput = readLine(),
+                  let regionValues = regionInput.split(separator: " ").compactMap({ CGFloat(String($0)) }),
+                  regionValues.count == 4 else {
+                print("Invalid region input")
+                continue
+            }
+            let region = CGRect(x: regionValues[0], y: regionValues[1], width: regionValues[2], height: regionValues[3])
+            editor.applyDither(to: region)
+        case "quit":
+            return
+        default:
+            print("Unknown command")
         }
-    case "undo":
-        undo()
-    case "redo":
-        redo()
-    case "save":
-        print("Enter output path:", terminator: " ")
-        guard let path = readLine() else { continue }
-        save(to: path)
-    case "quit":
-        exit(0)
-    default:
-        print("Unknown command")
     }
 }
+
+main()
+
