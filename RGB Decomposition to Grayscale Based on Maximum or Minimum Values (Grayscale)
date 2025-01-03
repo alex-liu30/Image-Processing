@@ -12,12 +12,7 @@ b) Compile using the command: swiftc ImageEditor.swift -o ImageEditor
 3. Run the Program:
 Execute the compiled program: ./ImageEditor
 
-4. Follow Prompts:
-Enter the path to your input image when prompted.
-
-Use the following command:
-
-RGB Decomposition: decompose <max/min> [x y width height]
+4. Use Command: decompose <max/min> [x y width height]
 
 For each effect, you can specify a region to apply it to by adding x, y, width, and height values after the command.
 
