@@ -20,62 +20,69 @@ a) Run the compiled program with: ./HighPassSharpen
 a) When prompted in the terminal, enter the blur radius for sharpening (between 0 and 100).
 
 */
-
 import Foundation
 import CoreGraphics
 import UIKit
 
-func highPassSharpen(image: UIImage, radius: CGFloat) -> UIImage? {
-    guard let ciImage = CIImage(image: image) else { return nil }
-    
-    // Create a Gaussian blur filter to create the low-pass version
-    let gaussianBlurFilter = CIFilter(name: "CIGaussianBlur")!
-    gaussianBlurFilter.setValue(ciImage, forKey: kCIInputImageKey)
-    gaussianBlurFilter.setValue(radius, forKey: kCIInputRadiusKey)
-    
-    guard let blurredImage = gaussianBlurFilter.outputImage else { return nil }
-    
-    // Subtract the blurred image from the original image
-    let subtractFilter = CIFilter(name: "CISubtractBlendMode")!
-    subtractFilter.setValue(ciImage, forKey: kCIInputImageKey)
-    subtractFilter.setValue(blurredImage, forKey: kCIInputBackgroundImageKey)
-    
-    guard let sharpenedImage = subtractFilter.outputImage else { return nil }
-    
-    return UIImage(ciImage: sharpenedImage)
-}
+class ImageEditor {
+    private var imageStack: [UIImage] = []
+    private var currentIndex = 0
 
-// Main execution starts here
-
-let imagePath = "/path/to/your/image.jpg" // Change this line to your image path
-guard let inputImage = UIImage(contentsOfFile: imagePath) else {
-    print("Failed to load image")
-    exit(1)
-}
-
-print("Enter blur radius for sharpening (0-100): ", terminator: "")
-guard let radiusInput = readLine(), let radius = CGFloat(Double(radiusInput) ?? 0), radius >= 0 && radius <= 100 else {
-    print("Invalid input. Please enter a number between 0 and 100.")
-    exit(1)
-}
-
-if let outputImage = highPassSharpen(image: inputImage, radius: radius) {
-    print("High-pass sharpening applied successfully.")
-    
-    // Save the output image (you can specify the output path)
-    let outputPath = "/path/to/your/output_image.png" // Change this line to your desired output path
-    
-    guard let data = outputImage.pngData() else {
-        print("Failed to convert image to PNG data.")
-        exit(1)
+    init?(path: String) {
+        guard let inputImage = UIImage(contentsOfFile: path) else { return nil }
+        imageStack.append(inputImage)
     }
-    
-    do {
-        try data.write(to: URL(fileURLWithPath: outputPath))
-        print("Output image saved to \(outputPath)")
-    } catch {
-        print("Failed to save image: \(error)")
+
+    func highPassSharpen(radius: CGFloat, region: CGRect? = nil) {
+        guard let ciImage = CIImage(image: imageStack[currentIndex]) else { return }
+        let blurFilter = CIFilter(name: "CIGaussianBlur")!
+        blurFilter.setValue(ciImage, forKey: kCIInputImageKey)
+        blurFilter.setValue(radius, forKey: kCIInputRadiusKey)
+        guard let blurredImage = blurFilter.outputImage else { return }
+        
+        let subtractFilter = CIFilter(name: "CISubtractBlendMode")!
+        subtractFilter.setValue(ciImage, forKey: kCIInputImageKey)
+        subtractFilter.setValue(blurredImage, forKey: kCIInputBackgroundImageKey)
+        guard let sharpenedImage = subtractFilter.outputImage else { return }
+        
+        if let region = region {
+            UIGraphicsBeginImageContext(imageStack[currentIndex].size)
+            imageStack[currentIndex].draw(in: CGRect(origin: .zero, size: imageStack[currentIndex].size))
+            UIImage(ciImage: sharpenedImage).draw(in: region)
+            imageStack.append(UIGraphicsGetImageFromCurrentImageContext()!)
+            UIGraphicsEndImageContext()
+        } else {
+            imageStack.append(UIImage(ciImage: sharpenedImage))
+        }
+        currentIndex += 1
     }
-} else {
-    print("Failed to apply high-pass sharpening.")
+
+    func undo() { if currentIndex > 0 { currentIndex -= 1 } }
+    func redo() { if currentIndex < imageStack.count - 1 { currentIndex += 1 } }
+    func revertToOriginal() { currentIndex = 0 }
+    func save(to path: String) { try? imageStack[currentIndex].pngData()?.write(to: URL(fileURLWithPath: path)) }
 }
+
+func main() {
+    print("Enter image path:")
+    guard let path = readLine(), let editor = ImageEditor(path: path) else { fatalError("Failed to load image") }
+
+    while true {
+        print("\nCommands: sharpen <radius> [x y width height], undo, redo, save <path>, revert, quit")
+        guard let input = readLine()?.lowercased().split(separator: " ") else { continue }
+        switch input[0] {
+        case "sharpen":
+            guard input.count >= 2, let radius = CGFloat(input[1]) else { print("Invalid radius"); continue }
+            let region = input.count == 6 ? CGRect(x: Double(input[2])!, y: Double(input[3])!, width: Double(input[4])!, height: Double(input[5])!) : nil
+            editor.highPassSharpen(radius: radius, region: region)
+        case "undo": editor.undo()
+        case "redo": editor.redo()
+        case "save": if input.count == 2 { editor.save(to: String(input[1])) }
+        case "revert": editor.revertToOriginal()
+        case "quit": return
+        default: print("Unknown command")
+        }
+    }
+}
+
+main()
