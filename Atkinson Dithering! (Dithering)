@@ -5,9 +5,7 @@ How to Use This Code
 
 1. Save the Code:
 
-Copy the entire code and save it as a separate .swift file with the descriptive name:
-
-Atkinson Dithering: AtkinsonDithering.swift
+Copy the entire code and save it as a separate .swift file with the descriptive name: AtkinsonDithering.swift
 
 2. Compile the Code:
 a) Open your terminal and navigate to the directory containing the .swift file.
