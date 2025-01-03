@@ -24,80 +24,78 @@ When prompted in the terminal, enter 0 for red, 1 for green, or 2 for blue as th
 
 */
 
-
 import Foundation
 import CoreGraphics
 import UIKit
-import ImageIO
 
-func convertToGrayscaleUsingChannel(image: UIImage, channel: Int) -> UIImage? {
-    guard let cgImage = image.cgImage else { return nil }
-    let width = cgImage.width
-    let height = cgImage.height
-    let colorSpace = CGColorSpaceCreateDeviceRGB()
-    
-    guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace, bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return nil }
-    
-    context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-    
-    guard let buffer = context.data else { return nil }
-    let pixelBuffer = buffer.bindMemory(to: UInt8.self, capacity: width * height * 4)
-    
-    for i in 0..<width * height {
-        let index = i * 4
-        let grayValue: UInt8
+class ImageEditor {
+    private var imageStack: [UIImage] = []
+    private var currentIndex = 0
+
+    init?(path: String) {
+        guard let inputImage = UIImage(contentsOfFile: path) else { return nil }
+        imageStack.append(inputImage)
+    }
+
+    func convertToGrayscaleUsingChannel(channel: Int, region: CGRect? = nil) {
+        guard let cgImage = imageStack[currentIndex].cgImage else { return }
+        let width = region?.width ?? CGFloat(cgImage.width)
+        let height = region?.height ?? CGFloat(cgImage.height)
         
-        switch channel {
-        case 0: // Red channel
-            grayValue = pixelBuffer[index]
-        case 1: // Green channel
-            grayValue = pixelBuffer[index + 1]
-        case 2: // Blue channel
-            grayValue = pixelBuffer[index + 2]
-        default:
-            return nil // Invalid channel
+        guard let context = CGContext(data: nil, width: Int(width), height: Int(height), bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return }
+        
+        context.draw(cgImage, in: region ?? CGRect(x: 0, y: 0, width: width, height: height))
+        
+        guard let buffer = context.data?.bindMemory(to: UInt8.self, capacity: Int(width * height * 4)) else { return }
+        
+        for i in 0..<Int(width * height) {
+            let index = i * 4
+            let grayValue = buffer[index + channel]
+            buffer[index] = grayValue
+            buffer[index + 1] = grayValue
+            buffer[index + 2] = grayValue
         }
         
-        pixelBuffer[index] = grayValue
-        pixelBuffer[index + 1] = grayValue
-        pixelBuffer[index + 2] = grayValue
+        if let outputImage = context.makeImage().flatMap({ UIImage(cgImage: $0) }) {
+            if region != nil {
+                UIGraphicsBeginImageContext(imageStack[currentIndex].size)
+                imageStack[currentIndex].draw(in: CGRect(origin: .zero, size: imageStack[currentIndex].size))
+                outputImage.draw(in: region!)
+                imageStack.append(UIGraphicsGetImageFromCurrentImageContext()!)
+                UIGraphicsEndImageContext()
+            } else {
+                imageStack.append(outputImage)
+            }
+            currentIndex += 1
+        }
     }
-    
-    guard let outputCGImage = context.makeImage() else { return nil }
-    return UIImage(cgImage: outputCGImage)
+
+    func undo() { if currentIndex > 0 { currentIndex -= 1 } }
+    func redo() { if currentIndex < imageStack.count - 1 { currentIndex += 1 } }
+    func revertToOriginal() { currentIndex = 0 }
+    func save(to path: String) { try? imageStack[currentIndex].pngData()?.write(to: URL(fileURLWithPath: path)) }
 }
 
-// Main execution starts here!!!!!
+func main() {
+    print("Enter image path:")
+    guard let path = readLine(), let editor = ImageEditor(path: path) else { fatalError("Failed to load image") }
 
-let imagePath = "/path/to/your/image.jpg" // Change this line to your image path
-guard let inputImage = UIImage(contentsOfFile: imagePath) else {
-    print("Failed to load image")
-    exit(1)
-}
-
-print("Choose a channel for grayscale conversion (0 for Red, 1 for Green, 2 for Blue): ", terminator: "")
-guard let input = readLine(), let channel = Int(input), channel >= 0 && channel <= 2 else {
-    print("Invalid input. Please enter 0, 1, or 2.")
-    exit(1)
-}
-
-if let outputImage = convertToGrayscaleUsingChannel(image: inputImage, channel: channel) {
-    print("Grayscale conversion applied successfully.")
-    
-    // Save the output image (you can specify the output path)
-    let outputPath = "/path/to/your/output_image.png" // Change this line to your desired output path
-    
-    guard let data = outputImage.pngData() else {
-        print("Failed to convert image to PNG data.")
-        exit(1)
+    while true {
+        print("\nCommands: grayscale <channel> [x y width height], undo, redo, save <path>, revert, quit")
+        guard let input = readLine()?.lowercased().split(separator: " ") else { continue }
+        switch input[0] {
+        case "grayscale":
+            guard input.count >= 2, let channel = Int(input[1]), (0...2).contains(channel) else { print("Invalid channel"); continue }
+            let region = input.count == 6 ? CGRect(x: Double(input[2])!, y: Double(input[3])!, width: Double(input[4])!, height: Double(input[5])!) : nil
+            editor.convertToGrayscaleUsingChannel(channel: channel, region: region)
+        case "undo": editor.undo()
+        case "redo": editor.redo()
+        case "save": if input.count == 2 { editor.save(to: String(input[1])) }
+        case "revert": editor.revertToOriginal()
+        case "quit": return
+        default: print("Unknown command")
+        }
     }
-    
-    do {
-        try data.write(to: URL(fileURLWithPath: outputPath))
-        print("Output image saved to \(outputPath)")
-    } catch {
-        print("Failed to save image: \(error)")
-    }
-} else {
-    print("Failed to apply grayscale conversion.")
 }
+
+main()
