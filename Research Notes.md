@@ -1,4 +1,4 @@
-Iused a lot of general concepts (stuff that could be applied generally to most/all machines) and more specific concept-focused learning for each specific machine.
+I used a lot of general concepts (stuff that could be applied generally to most/all machines) and more specific concept-focused learning for each specific machine.
 
 General Concepts
 
@@ -19,7 +19,7 @@ Tool-Specific Insights
 
 Adaptive Thresholding
 Adaptive Thresholding Specifically: Researched different thresholding methods, deciding on adaptive thresholding as I found its complexity interesting 
-Binary Images: Tried to learn careful manipulation of pixel values to do this.
+Binary Images: Tried to learn careful manipulation of pixel values to do this. Unsuccessful but I did  have "applyAdaptiveThreshold" that can be expanded to include more complex image processing techniques ie future enhancements.
 
 Atkinson Dithering
 Dithering Algorithms: Looked at dithering techniques online, particularly Atkinson dithering
