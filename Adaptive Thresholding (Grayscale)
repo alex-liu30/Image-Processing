@@ -27,33 +27,47 @@ import CoreGraphics
 import ImageIO
 
 class ImageEditor {
+    private var originalImage: CIImage
     private var image: CIImage
     private var undoStack: [CIImage] = []
     private var redoStack: [CIImage] = []
     
     init?(path: String) {
         guard let image = CIImage(contentsOf: URL(fileURLWithPath: path)) else { return nil }
+        self.originalImage = image
         self.image = image
     }
     
-    func apply(_ effect: (CIImage) -> CIImage) {
+    func apply(_ effect: (CIImage) -> CIImage, to region: CGRect? = nil) {
         undoStack.append(image)
         redoStack.removeAll()
-        image = effect(image)
+        if let region = region {
+            let maskedImage = image.cropped(to: region)
+            let effectedRegion = effect(maskedImage)
+            image = image.composited(over: effectedRegion)
+        } else {
+            image = effect(image)
+        }
     }
     
     func undo() { if let prev = undoStack.popLast() { redoStack.append(image); image = prev } }
     func redo() { if let next = redoStack.popLast() { undoStack.append(image); image = next } }
     
-    func applyAdaptiveThreshold() {
-        apply { img in
+    func revertToOriginal() {
+        undoStack.append(image)
+        redoStack.removeAll()
+        image = originalImage
+    }
+    
+    func applyAdaptiveThreshold(to region: CGRect? = nil) {
+        apply({ img in
             let filter = CIFilter(name: "CIColorControls")!
             filter.setValue(img, forKey: kCIInputImageKey)
             filter.setValue(1.0, forKey: kCIInputSaturationKey)
             filter.setValue(0.0, forKey: kCIInputBrightnessKey)
             filter.setValue(1.0, forKey: kCIInputContrastKey)
             return filter.outputImage ?? img
-        }
+        }, to: region)
     }
     
     func save(to path: String) throws {
@@ -86,7 +100,7 @@ func main() {
     }
     
     while true {
-        print("\nCommands: threshold, undo, redo, save, quit")
+        print("\nCommands: threshold, undo, redo, save, quit, revert, region")
         print("Enter command:", terminator: " ")
         
         guard let command = readLine()?.lowercased() else { continue }
@@ -112,6 +126,20 @@ func main() {
             }
         case "quit":
             return
+        case "revert":
+            editor.revertToOriginal()
+            print("Reverted to original image")
+        case "region":
+            print("Enter region (x y width height):", terminator: " ")
+            guard let regionInput = readLine(),
+                  let regionValues = regionInput.split(separator: " ").map({ CGFloat(String($0)) }),
+                  regionValues.count == 4 else {
+                print("Invalid region input")
+                continue
+            }
+            let region = CGRect(x: regionValues[0], y: regionValues[1], width: regionValues[2], height: regionValues[3])
+            editor.applyAdaptiveThreshold(to: region)
+            print("Applied adaptive threshold to region")
         default:
             print("Unknown command")
         }
