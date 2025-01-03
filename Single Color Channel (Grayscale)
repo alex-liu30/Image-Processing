@@ -13,34 +13,7 @@ b) Compile using the command: swiftc ImageEditor.swift -o ImageEditor
 3. Run the Program:
 Execute the compiled program: ./ImageEditor
 
-4. Follow Prompts:
-Enter the path to your input image when prompted.
-
-Use the following commands for each tool:
-Adaptive Thresholding:
-threshold [x y width height]
-
-Atkinson Dithering:
-dither [x y width height]
-
-Grayscale Converter:
-grayscale <shades> [x y width height]
-
-Gaussian Blur and Laplacian Sharpening:
-blur <radius> [x y width height]
-sharpen [x y width height]
-
-High-Pass Sharpening:
-sharpen <radius> [x y width height]
-
-Motion Blur:
-blur <radius> <angle> [x y width height]
-
-RGB Decomposition:
-decompose <max/min> [x y width height]
-
-Single Color Channel:
-grayscale <channel> [x y width height]
+4. Follow Prompt: grayscale <channel> [x y width height]
 
 Note: General commands for all tools:
 undo: Undo the last operation
