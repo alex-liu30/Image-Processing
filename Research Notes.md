@@ -23,6 +23,7 @@ Binary Images: Tried to learn careful manipulation of pixel values to do this. U
 
 Atkinson Dithering
 Dithering Algorithms: Looked at dithering techniques online, particularly Atkinson dithering
+Custom Error Diffusion Logic: Calculated  quantization error for each pixel and distributed it to neighboring pixels based on specific weights. 
 
 Grayscale Converter with User-Specified Shades
 Shades of Gray: Investigated how to convert RGB images into grayscale using different methods (average, luminosity) and how to control the number of gray shades.
