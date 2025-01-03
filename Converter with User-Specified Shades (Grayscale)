@@ -13,7 +13,7 @@ b) Compile using the command: swiftc ImageEditor.swift -o ImageEditor
 3. Run the Program:
 Execute the compiled program: ./ImageEditor
 
-4. Follow Prompt: grayscale <shades> [x y width height]
+4. Use Command: grayscale <shades> [x y width height]
 
 5. Optional Region Processing:
 For each effect, you can specify a region to apply it to by adding x, y, width, and height values after the command.
