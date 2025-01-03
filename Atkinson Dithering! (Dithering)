@@ -23,10 +23,12 @@ After running the program, check your specified output path for the dithered ima
 
 */
 
-
 import Foundation
 import CoreGraphics
 import UIKit
+
+var imageStack: [UIImage] = []
+var currentIndex = -1
 
 func atkinsonDither(image: UIImage) -> UIImage? {
     guard let cgImage = image.cgImage else { return nil }
@@ -72,6 +74,37 @@ func atkinsonDither(image: UIImage) -> UIImage? {
     return UIImage(cgImage: outputCGImage)
 }
 
+func undo() {
+    if currentIndex > 0 {
+        currentIndex -= 1
+        print("Undo performed")
+    } else {
+        print("Nothing to undo")
+    }
+}
+
+func redo() {
+    if currentIndex < imageStack.count - 1 {
+        currentIndex += 1
+        print("Redo performed")
+    } else {
+        print("Nothing to redo")
+    }
+}
+
+func save(to path: String) {
+    guard currentIndex >= 0, let data = imageStack[currentIndex].pngData() else {
+        print("No image to save")
+        return
+    }
+    do {
+        try data.write(to: URL(fileURLWithPath: path))
+        print("Image saved to \(path)")
+    } catch {
+        print("Failed to save image: \(error)")
+    }
+}
+
 // Main execution starts here
 
 let imagePath = "/path/to/your/image.jpg" // Change this line to your image path
@@ -80,23 +113,34 @@ guard let inputImage = UIImage(contentsOfFile: imagePath) else {
     exit(1)
 }
 
-if let outputImage = atkinsonDither(image: inputImage) {
-    print("Atkinson dithering applied successfully.")
+imageStack.append(inputImage)
+currentIndex = 0
+
+while true {
+    print("Enter command (dither/undo/redo/save/quit):", terminator: " ")
+    guard let command = readLine()?.lowercased() else { continue }
     
-    // Save the output image (you can specify the output path)
-    let outputPath = "/path/to/your/output_image.png" // Change this line to your desired output path
-    
-    guard let data = outputImage.pngData() else {
-        print("Failed to convert image to PNG data.")
-        exit(1)
+    switch command {
+    case "dither":
+        if let ditheredImage = atkinsonDither(image: imageStack[currentIndex]) {
+            currentIndex += 1
+            imageStack.removeSubrange(currentIndex..<imageStack.count)
+            imageStack.append(ditheredImage)
+            print("Atkinson dithering applied successfully.")
+        } else {
+            print("Failed to apply Atkinson dithering.")
+        }
+    case "undo":
+        undo()
+    case "redo":
+        redo()
+    case "save":
+        print("Enter output path:", terminator: " ")
+        guard let path = readLine() else { continue }
+        save(to: path)
+    case "quit":
+        exit(0)
+    default:
+        print("Unknown command")
     }
-    
-    do {
-        try data.write(to: URL(fileURLWithPath: outputPath))
-        print("Output image saved to \(outputPath)")
-    } catch {
-        print("Failed to save image: \(error)")
-    }
-} else {
-    print("Failed to apply Atkinson dithering.")
 }
