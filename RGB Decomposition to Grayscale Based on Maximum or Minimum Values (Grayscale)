@@ -21,95 +21,78 @@ Run the compiled program with: ./ImageEditor
 5. Follow Prompts:
 When prompted in the terminal, enter either maximum or minimum for the decomposition type.
 */
-
 import Foundation
 import CoreGraphics
 import UIKit
-import ImageIO
 
-enum DecompositionType {
-    case maximum, minimum
-}
+enum DecompositionType { case maximum, minimum }
 
-func decomposeToGrayscale(image: UIImage, type: DecompositionType) -> UIImage? {
-    guard let cgImage = image.cgImage else { return nil }
-    let width = cgImage.width
-    let height = cgImage.height
-    let colorSpace = CGColorSpaceCreateDeviceRGB()
-    var bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
-    
-    guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace, bitmapInfo: bitmapInfo.rawValue) else { return nil }
-    
-    context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-    
-    guard let buffer = context.data else { return nil }
-    let pixelBuffer = buffer.bindMemory(to: UInt8.self, capacity: width * height * 4)
-    
-    for i in stride(from: 0, to: width * height * 4, by: 4) {
-        let r = pixelBuffer[i]
-        let g = pixelBuffer[i + 1]
-        let b = pixelBuffer[i + 2]
+class ImageEditor {
+    private var imageStack: [UIImage] = []
+    private var currentIndex = 0
+
+    init?(path: String) {
+        guard let inputImage = UIImage(contentsOfFile: path) else { return nil }
+        imageStack.append(inputImage)
+    }
+
+    func decomposeToGrayscale(type: DecompositionType, region: CGRect? = nil) {
+        guard let cgImage = imageStack[currentIndex].cgImage else { return }
+        let width = region?.width ?? CGFloat(cgImage.width)
+        let height = region?.height ?? CGFloat(cgImage.height)
         
-        let gray: UInt8
-        switch type {
-        case .maximum:
-            gray = max(r, g, b)
-        case .minimum:
-            gray = min(r, g, b)
+        guard let context = CGContext(data: nil, width: Int(width), height: Int(height), bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+        
+        context.draw(cgImage, in: region ?? CGRect(x: 0, y: 0, width: width, height: height))
+        
+        guard let buffer = context.data?.bindMemory(to: UInt8.self, capacity: Int(width * height * 4)) else { return }
+        
+        for i in stride(from: 0, to: Int(width * height * 4), by: 4) {
+            let gray = type == .maximum ? max(buffer[i], buffer[i+1], buffer[i+2]) : min(buffer[i], buffer[i+1], buffer[i+2])
+            buffer[i] = gray; buffer[i+1] = gray; buffer[i+2] = gray
         }
         
-        pixelBuffer[i] = gray
-        pixelBuffer[i + 1] = gray
-        pixelBuffer[i + 2] = gray
+        if let outputImage = context.makeImage().flatMap({ UIImage(cgImage: $0) }) {
+            if region != nil {
+                UIGraphicsBeginImageContext(imageStack[currentIndex].size)
+                imageStack[currentIndex].draw(in: CGRect(origin: .zero, size: imageStack[currentIndex].size))
+                outputImage.draw(in: region!)
+                imageStack.append(UIGraphicsGetImageFromCurrentImageContext()!)
+                UIGraphicsEndImageContext()
+            } else {
+                imageStack.append(outputImage)
+            }
+            currentIndex += 1
+        }
     }
-    
-    guard let outputCGImage = context.makeImage() else { return nil }
-    return UIImage(cgImage: outputCGImage)
+
+    func undo() { if currentIndex > 0 { currentIndex -= 1 } }
+    func redo() { if currentIndex < imageStack.count - 1 { currentIndex += 1 } }
+    func revertToOriginal() { currentIndex = 0 }
+    func save(to path: String) { try? imageStack[currentIndex].pngData()?.write(to: URL(fileURLWithPath: path)) }
 }
 
-// Main execution starts here
+func main() {
+    print("Enter image path:")
+    guard let path = readLine(), let editor = ImageEditor(path: path) else { fatalError("Failed to load image") }
 
-let imagePath = "/path/to/your/image.jpg" // Change this line to your image path
-
-guard let inputImage = UIImage(contentsOfFile: imagePath) else {
-    print("Failed to load image")
-    exit(1)
-}
-
-print("Choose decomposition type (maximum/minimum): ", terminator: "")
-guard let decompositionTypeInput = readLine()?.lowercased() else {
-    print("Invalid input")
-    exit(1)
-}
-
-let decompositionType: DecompositionType
-switch decompositionTypeInput {
-case "maximum":
-    decompositionType = .maximum
-case "minimum":
-    decompositionType = .minimum
-default:
-    print("Invalid decomposition type. Use 'maximum' or 'minimum'.")
-    exit(1)
-}
-
-if let outputImage = decomposeToGrayscale(image: inputImage, type: decompositionType) {
-    print("Decomposition applied successfully.")
-    
-    // Save the output image (you can specify the output path)
-    let outputPath = "/path/to/your/output_image.png" // Change this line to your desired output path
-    
-    guard let data = outputImage.pngData() else {
-        print("Failed to convert image to PNG data.")
-        exit(1)
+    while true {
+        print("\nCommands: decompose <max/min> [x y width height], undo, redo, save <path>, revert, quit")
+        guard let input = readLine()?.lowercased().split(separator: " ") else { continue }
+        switch input[0] {
+        case "decompose":
+            guard input.count >= 2 else { print("Invalid input"); continue }
+            let type: DecompositionType = input[1] == "max" ? .maximum : .minimum
+            let region = input.count == 6 ? CGRect(x: Double(input[2])!, y: Double(input[3])!, width: Double(input[4])!, height: Double(input[5])!) : nil
+            editor.decomposeToGrayscale(type: type, region: region)
+        case "undo": editor.undo()
+        case "redo": editor.redo()
+        case "save": if input.count == 2 { editor.save(to: String(input[1])) }
+        case "revert": editor.revertToOriginal()
+        case "quit": return
+        default: print("Unknown command")
+        }
     }
-    
-    do {
-        try data.write(to: URL(fileURLWithPath: outputPath))
-        print("Output image saved to \(outputPath)")
-    } catch {
-        print("Failed to save image: \(error)")
-    }
-} else {
-    print("Failed to apply decomposition.")
 }
+
+main()
